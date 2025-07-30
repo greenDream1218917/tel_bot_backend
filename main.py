@@ -20,11 +20,13 @@ from routers.telegram_integration import router as telegram_router
 from routers.send_message import router as send_message_router
 from routers.check_chatgpt import router as chatgpt_router
 from routers.check_telegram_bot import router as telegram_bot_router
+from routers.generate_message import router as generate_message_router
 
 app.include_router(telegram_router)
 app.include_router(send_message_router)
 app.include_router(chatgpt_router)
 app.include_router(telegram_bot_router)
+app.include_router(generate_message_router)
 
 @app.get("/health")
 async def health_check():
