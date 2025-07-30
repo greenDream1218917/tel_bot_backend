@@ -6,14 +6,24 @@ from telethon.tl.types import User, Chat, Channel
 import asyncio
 import os
 import json
+import requests
 from typing import List, Optional
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
+from fastapi.middleware.cors import CORSMiddleware
 
 # Load environment variables
 load_dotenv()
 
 app = FastAPI(title="Telegram Bot Backend", description="Telegram integration API")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # You can restrict this to your frontend URL
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Store active sessions
 active_sessions = {}
@@ -39,6 +49,23 @@ class SendMessageResponse(BaseModel):
     responses: List[List[str]] = []  # List of lists - each inner list contains all responses for one message
     error: str = None
     debug_info: dict = None
+
+class ChatGPTCheckRequest(BaseModel):
+    api_key: str
+
+class ChatGPTCheckResponse(BaseModel):
+    success: bool
+    message: str
+    error: str = None
+
+class TelegramBotCheckRequest(BaseModel):
+    bot_token: str
+    channel_id: str
+
+class TelegramBotCheckResponse(BaseModel):
+    success: bool
+    message: str
+    error: str = None
 
 @app.post("/integrate_telegram", response_model=TelegramIntegrationResponse)
 async def integrate_telegram(request: TelegramIntegrationRequest):
@@ -240,6 +267,125 @@ async def send_message_and_scrape(request: SendMessageRequest):
         return SendMessageResponse(
             success=False,
             message=f"Failed to send messages: {str(e)}",
+            error=str(e)
+        )
+
+@app.post("/api/check-openai", response_model=ChatGPTCheckResponse)
+async def check_openai(request: ChatGPTCheckRequest):
+    """
+    Check ChatGPT API interaction
+    """
+    try:
+        # Test ChatGPT API with a simple request
+        headers = {
+            "Content-Type": "application/json"
+        }
+        
+        data = {
+            "model": "gpt-4o-mini",
+            "messages": [
+                {"role": "user", "content": "Hello, this is a test message. Please respond with 'API test successful'."}
+            ],
+            "max_tokens": 50
+        }
+        
+        response = requests.post(
+            "https://api.openai.com/v1/chat/completions",
+            headers={**headers, "Authorization": f"Bearer {request.api_key}"},
+            json=data,
+            timeout=30
+        )
+        
+        if response.status_code == 200:
+            return ChatGPTCheckResponse(
+                success=True,
+                message="ChatGPT API interaction successful"
+            )
+        else:
+            error_detail = response.json().get('error', {}).get('message', 'Unknown error')
+            return ChatGPTCheckResponse(
+                success=False,
+                message=f"ChatGPT API interaction failed: {error_detail}",
+                error=f"HTTP {response.status_code}: {error_detail}"
+            )
+            
+    except requests.exceptions.RequestException as e:
+        return ChatGPTCheckResponse(
+            success=False,
+            message=f"Network error while checking ChatGPT API: {str(e)}",
+            error=str(e)
+        )
+    except Exception as e:
+        return ChatGPTCheckResponse(
+            success=False,
+            message=f"Error checking ChatGPT API: {str(e)}",
+            error=str(e)
+        )
+
+@app.post("/check_telegram_bot", response_model=TelegramBotCheckResponse)
+async def check_telegram_bot(request: TelegramBotCheckRequest):
+    """
+    Check Telegram Bot API interaction
+    """
+    try:
+        # Test Telegram Bot API by getting bot info
+        bot_info_url = f"https://api.telegram.org/bot{request.bot_token}/getMe"
+        bot_info_response = requests.get(bot_info_url, timeout=30)
+        
+        if bot_info_response.status_code != 200:
+            return TelegramBotCheckResponse(
+                success=False,
+                message=f"Telegram Bot API check failed: Invalid bot token",
+                error=f"HTTP {bot_info_response.status_code}: Invalid bot token"
+            )
+        
+        bot_info = bot_info_response.json()
+        if not bot_info.get('ok'):
+            return TelegramBotCheckResponse(
+                success=False,
+                message=f"Telegram Bot API check failed: {bot_info.get('description', 'Unknown error')}",
+                error=bot_info.get('description', 'Unknown error')
+            )
+        
+        # Test sending a message to the channel (this will fail if bot doesn't have permission, but we can check if the API works)
+        send_message_url = f"https://api.telegram.org/bot{request.bot_token}/sendMessage"
+        send_data = {
+            "chat_id": request.channel_id,
+            "text": "Bot API test message - this is a test to verify bot permissions."
+        }
+        
+        send_response = requests.post(send_message_url, json=send_data, timeout=30)
+        
+        if send_response.status_code == 200:
+            send_result = send_response.json()
+            if send_result.get('ok'):
+                return TelegramBotCheckResponse(
+                    success=True,
+                    message=f"Telegram Bot API interaction successful. Bot: @{bot_info['result']['username']}"
+                )
+            else:
+                return TelegramBotCheckResponse(
+                    success=False,
+                    message=f"Telegram Bot API interaction failed: {send_result.get('description', 'Unknown error')}",
+                    error=send_result.get('description', 'Unknown error')
+                )
+        else:
+            return TelegramBotCheckResponse(
+                success=False,
+                message=f"Telegram Bot API interaction failed: HTTP {send_response.status_code}",
+                error=f"HTTP {send_response.status_code}"
+            )
+            
+    except requests.exceptions.RequestException as e:
+        return TelegramBotCheckResponse(
+            success=False,
+            message=f"Network error while checking Telegram Bot API: {str(e)}",
+            error=str(e)
+        )
+    except Exception as e:
+        return TelegramBotCheckResponse(
+            success=False,
+            message=f"Error checking Telegram Bot API: {str(e)}",
             error=str(e)
         )
 

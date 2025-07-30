@@ -103,6 +103,49 @@ Send messages to target user and scrape their responses.
 }
 ```
 
+### 5. Check ChatGPT API
+**POST** `/check_chatgpt_api`
+
+Test ChatGPT API interaction and verify API key validity.
+
+**Request Body:**
+```json
+{
+    "api_key": "sk-your-openai-api-key-here"
+}
+```
+
+**Response:**
+```json
+{
+    "success": true,
+    "message": "ChatGPT API interaction successful",
+    "error": null
+}
+```
+
+### 6. Check Telegram Bot API
+**POST** `/check_telegram_bot`
+
+Test Telegram Bot API interaction and verify bot token and channel permissions.
+
+**Request Body:**
+```json
+{
+    "bot_token": "1234567890:ABCdefGHIjklMNOpqrsTUVwxyz",
+    "channel_id": "@your_channel_name"
+}
+```
+
+**Response:**
+```json
+{
+    "success": true,
+    "message": "Telegram Bot API interaction successful. Bot: @your_bot_username",
+    "error": null
+}
+```
+
 ## Usage Example
 
 ```python
@@ -131,7 +174,19 @@ print("All responses:", result["responses"])
 # Access individual responses
 for i, response_group in enumerate(result["responses"]):
     print(f"Responses to message {i+1}: {response_group}")
-```
+
+# Test ChatGPT API
+chatgpt_response = requests.post("http://localhost:8000/check_chatgpt_api", json={
+    "api_key": "sk-your-openai-api-key-here"
+})
+print("ChatGPT API Check:", chatgpt_response.json())
+
+# Test Telegram Bot API
+bot_response = requests.post("http://localhost:8000/check_telegram_bot", json={
+    "bot_token": "1234567890:ABCdefGHIjklMNOpqrsTUVwxyz",
+    "channel_id": "@your_channel_name"
+})
+print("Telegram Bot API Check:", bot_response.json())
 
 ## Notes
 
