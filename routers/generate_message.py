@@ -45,6 +45,7 @@ async def generate_message(request: GenerateMessageRequest):
         if response.status_code == 200:
             result = response.json()
             generated_text = result['choices'][0]['message']['content']
+            print(generated_text)
             return GenerateMessageResponse(
                 success=True,
                 message="Message generated successfully",
