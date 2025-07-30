@@ -5,10 +5,9 @@ from telethon.errors import SessionPasswordNeededError, PhoneCodeInvalidError, U
 from telethon.tl.types import User, Chat, Channel
 import asyncio
 from typing import List
+from .session_manager import add_session, get_active_sessions
 
 router = APIRouter()
-
-active_sessions = {}
 
 class TelegramIntegrationRequest(BaseModel):
     api_id: int
@@ -21,7 +20,7 @@ class TelegramIntegrationResponse(BaseModel):
     message: str
     session_name: str = None
 
-@router.post("/integrate_telegram", response_model=TelegramIntegrationResponse)
+@router.post("/api/integrate_telegram", response_model=TelegramIntegrationResponse)
 async def integrate_telegram(request: TelegramIntegrationRequest):
     try:
         session_name = f"session_{request.phone.replace('+', '').replace('-', '').replace(' ', '')}"
@@ -30,7 +29,7 @@ async def integrate_telegram(request: TelegramIntegrationRequest):
         if not await client.is_user_authorized():
             return TelegramIntegrationResponse(success=False, message="Failed to authorize. Please check your credentials and try again.")
         me = await client.get_me()
-        active_sessions[session_name] = {
+        session_data = {
             "client": client,
             "phone": request.phone,
             "target_username": request.target_username,
@@ -41,6 +40,7 @@ async def integrate_telegram(request: TelegramIntegrationRequest):
                 "last_name": me.last_name
             }
         }
+        add_session(session_name, session_data)
         return TelegramIntegrationResponse(success=True, message=f"Successfully integrated Telegram account for {me.first_name} ({me.username})", session_name=session_name)
     except SessionPasswordNeededError:
         return TelegramIntegrationResponse(success=False, message="Two-factor authentication is enabled. Please provide the password.")
@@ -52,6 +52,7 @@ async def integrate_telegram(request: TelegramIntegrationRequest):
 @router.get("/sessions")
 async def get_active_sessions():
     sessions = []
+    active_sessions = get_active_sessions()
     for session_name, session_data in active_sessions.items():
         sessions.append({
             "session_name": session_name,

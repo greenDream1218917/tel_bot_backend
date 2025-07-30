@@ -5,11 +5,9 @@ from telethon.tl.types import User, Chat, Channel
 import asyncio
 from typing import List
 from datetime import datetime
+from .session_manager import get_session
 
 router = APIRouter()
-
-# This should be imported/shared from telegram_integration
-active_sessions = {}
 
 class SendMessageRequest(BaseModel):
     session_name: str
@@ -20,14 +18,15 @@ class SendMessageResponse(BaseModel):
     message: str
     responses: List[List[str]] = []
     error: str = None
-    debug_info: dict = None
 
-@router.post("/send_message", response_model=SendMessageResponse)
+@router.post("/api/fetch-data", response_model=SendMessageResponse)
 async def send_message_and_scrape(request: SendMessageRequest):
+
     try:
-        if request.session_name not in active_sessions:
+        session_data = get_session(request.session_name)
+        if not session_data:
             return SendMessageResponse(success=False, message="Session not found. Please integrate your Telegram account first.", error="Session not found")
-        session_data = active_sessions[request.session_name]
+        
         client = session_data["client"]
         target_username = session_data["target_username"]
         if not client.is_connected():
@@ -68,15 +67,6 @@ async def send_message_and_scrape(request: SendMessageRequest):
             success=True,
             message=f"Successfully sent {len(request.messages)} messages to {target_username}",
             responses=responses,
-            debug_info={
-                "target_username": target_username,
-                "my_user_id": my_id,
-                "messages_sent": len(request.messages),
-                "responses_found": sum(len(r) for r in responses),
-                "total_response_groups": len([r for r in responses if r]),
-                "target_entity_type": str(type(target_entity)),
-                "wait_time_seconds": 5
-            }
         )
     except Exception as e:
         return SendMessageResponse(success=False, message=f"Failed to send messages: {str(e)}", error=str(e))
